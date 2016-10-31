@@ -27,7 +27,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm8s_it.h"
-
+#include "stm8s_uart1.h"
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -37,9 +37,18 @@ extern uint16_t learn_f_value[32];
 extern u8  learn_f_flag;
 extern uint16_t f_value;
 extern uint16_t CCR1_Val;
+extern uint16_t level;
+//#define COM_RX_LEN			5
+uint8_t COM_RX_STA;
+uint8_t COM_RX_BUF[5];
+uint8_t data;
+int temp;
+u8 flag1,flag2,flag3,flag5 = 1 ,flag6 = 1 ;
 
 /* Private function prototypes -----------------------------------------------*/
 extern void TimingDelay_Decrement(void);
+extern void clear_BUF(unsigned char *p);
+extern void bsp_SendUart(uint8_t *p);
 /* Private functions ---------------------------------------------------------*/
 
 /* Public functions ----------------------------------------------------------*/
@@ -401,6 +410,7 @@ its = TIM1_GetITStatus(TIM1_IT_CC1);
   */
 }
 
+
 /**
   * @brief  UART1 RX Interrupt routine
   * @param  None
@@ -411,6 +421,55 @@ its = TIM1_GetITStatus(TIM1_IT_CC1);
   /* In order to detect unexpected events during development,
      it is recommended to set a breakpoint on the following instruction.
   */
+  
+  	if(UART1_GetITStatus(UART1_IT_RXNE) != RESET)	
+	{
+	       data = UART1_ReceiveData8();	
+               COM_RX_BUF[COM_RX_STA++]=data ;
+               
+		if(COM_RX_STA==5)
+		{ 
+			COM_RX_STA=0;
+                        flag1=0;
+		}
+        }     
+        if( COM_RX_BUF[0]==0x0A&& COM_RX_BUF[1]==0x05&& COM_RX_BUF[4]==0x0B)
+	{
+               
+		switch(COM_RX_BUF[2])						//控制命令第二个字节
+		{
+			case 0X00:
+				switch(COM_RX_BUF[3])		//控制命令第三个字节
+				{
+					case 0x00:
+                                          flag1=1;
+                                          break;
+					case 0x01:
+                                          flag1=2;
+                                          flag2=1;
+                                          break;
+                                }break;
+                        case 0X01:
+				switch(COM_RX_BUF[3])		//控制命令第三个字节
+				{
+                                        case 0x01:
+                                          flag1=4;
+                                          flag3=1;
+                                          break;
+					case 0x00:
+                                          flag1=3;
+                                          break;
+                                 }break;
+                        case 0X02:
+                               temp=COM_RX_BUF[3];
+                               flag1=5;
+                               break;
+                        default :  
+                               break;
+			
+                         }
+        }
+        UART1_ClearITPendingBit(UART1_IT_RXNE);
 }
 #endif /*STM8S105*/
 

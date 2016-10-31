@@ -1,3 +1,4 @@
+//20160822-2207
 /*
 
 主芯片:STM8S003F3
@@ -55,14 +56,19 @@ uint16_t learn_f_value[32];
 u8  learn_f_flag;
 uint16_t f_value;
 BitStatus bit_status;
-
+extern u8 flag1,flag2,flag3,flag5,flag6;
+extern uint8_t data;
+extern int temp;
+//u8 flag2,flag3;
+uint16_t   level=0;
+extern uint8_t COM_RX_BUF[5];
 
 static void CLK_Config(void);
 static void GPIO_Config(void);
 void Delay(__IO uint32_t nTime);
 
-
-
+unsigned char com[5]={0x0A,0x05,0x04,0x44,0x0B};
+unsigned char com1[5]={0x0A,0x05,0x03,0x22,0x0B};
 
 /**
   * @brief  Configure TIM4 to generate an update interrupt each 1ms 
@@ -224,6 +230,43 @@ static void TIM2_Config(void)
 }
 ///////////////////////////////////////////////////////////////////////////////
 
+/*
+*********************************************************************************************************
+*	函 数 名: bsp_InitUart
+*	功能说明: 初始化CPU的USART1串口硬件设备。启用中断。
+*	形    参: _baud 波特率
+*	返 回 值: 无
+*********************************************************************************************************
+*/
+void bsp_InitUart(uint32_t _baud)
+{
+		UART1_DeInit();
+	
+		/* 配置 UART1
+			- BaudRate = 115200 baud
+			- Word Length = 8 Bits
+		 	- One Stop Bit
+			- No parity
+			- Receive and transmit enabled
+			- UART1 Clock disabled
+		*/
+		UART1_Init((uint32_t)_baud, UART1_WORDLENGTH_8D, UART1_STOPBITS_1, UART1_PARITY_NO,
+				  UART1_SYNCMODE_CLOCK_DISABLE, UART1_MODE_TXRX_ENABLE);	
+	
+        UART1_ITConfig(UART1_IT_RXNE_OR, ENABLE);
+        UART1_Cmd(ENABLE);	
+}
+
+void bsp_SendUart(uint8_t *p)
+{
+	uint8_t i;
+	for(i = 0; i < 5; i++)
+	{
+		UART1_SendData8(p[i]);
+		while (UART1_GetFlagStatus(UART1_FLAG_TXE) == RESET);
+	}
+        while (UART1_GetFlagStatus(UART1_FLAG_TC) == RESET);
+}
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -242,7 +285,9 @@ void calculate_learn_f(void)
   f_value = (learn_f_value[0] / 100) * 100 + temp_vaule / 32;
 }
 
-    u8 KEY_Scan()
+
+
+u8 KEY_Scan()
     {	 
               //-读输入IO状态
           if(GPIO_ReadInputPin(GPIOB, GPIO_PIN_4)==RESET||GPIO_ReadInputPin(GPIOC, GPIO_PIN_4)==RESET)
@@ -258,23 +303,38 @@ void calculate_learn_f(void)
     }
 
 
-                              
+void clear_BUF(unsigned char *p)
+{
+	unsigned char  j; 
+	for(j=0;j<5;j++)
+	{
+		p[j]='\0';
+	}
+}
 
+                              
 
 
 ///////////////////////////////////////////////////////////////////////////////
 void main( void )
 {
-    uint16_t i = 0;
+ //   uint16_t i = 0;
     uint16_t flag = 1;
-    uint8_t   level=0,j=0;
-    u8 t;
+ //   uint16_t   level=0,j=0;
    /* Init GPIO for LED  */
-   GPIO_Config();   //-前期可以通过这个的输出,使用示波器来确定时间基准
-
+    GPIO_Config();   //-前期可以通过这个的输出,使用示波器来确定时间基准
+   
    /* CLK configuration --------------------------------------------*/
    CLK_Config();
 
+   
+   bsp_InitUart(9600);
+   
+   //UART1->BRR1 = 0x06;  
+  /* Clear the MSB mantissa of UART1DIV  */
+  //UART1->BRR2 = 0x82;  
+  
+//  uint32_t flag11 = CLK_GetClockFreq();
 /*   
    //-选项字节 为了定义引脚复用功能
    //-Define FLASH programming time
@@ -307,7 +367,7 @@ opt_byte2 = FLASH_ReadOptionByte(0x4804);
   
   //-模拟捕捉计算周期
   while(flag)
-  {
+  { 
     //-模拟输出脉宽
      /*  Toggle the LEDs  */
      GPIOA->ODR |= (uint8_t)GPIO_PIN_3;   //-输出高     
@@ -323,62 +383,122 @@ opt_byte2 = FLASH_ReadOptionByte(0x4804);
     }
   }
   
+  
   TIM2_Config();  //-设置好了周期
   
-   while (1)
-   {
-    //-模拟输出脉宽
+  
+  while(1)
+	{
+              //-模拟输出脉宽
      /*  Toggle the LEDs  */
      GPIOA->ODR |= (uint8_t)GPIO_PIN_3;   //-输出高     
      /* Insert 100 ms delay */
     Delay(10);     
      GPIOA->ODR &= (uint8_t)~GPIO_PIN_3;    //-输出低
      /* Insert 100 ms delay */
-    Delay(10); 
-     
-//    t=KEY_Scan();		//得到键值
-//	   if(t)
-//	{						   
-//	switch(t)
-//	{				 
-//              case 1:
-//                 if(level <= 75)
-//                    level+=5;
-//                 else
-//                    level = 0;
-//     CCR1_Val = ((uint32_t)f_value * level) / 200;
-//                 break;
-//             case 2:
-//               if(level >= 5)
-//                   level-=5;
-//               else
-//                   level= 75;
-//     CCR1_Val = ((uint32_t)f_value * level) / 200;
-//               break;
-//        }}
-//        else  Delay(100);
-  
-               
-    //-
-    //-范围为0到73百分之
-    
-    j++;
-    if(j == 20)
-    {
-      if(level < 73)
-        level++;
-      else
-        level = 0;
-      Delay(1);
-    }
-    else if(j > 21)
-      j = 0;
-    
-    CCR1_Val = ((uint32_t)f_value * level) / 200;
-    
-    }  } 
-    //-读输入IO状态
- //   if(GPIO_ReadInputPin(GPIOB, GPIO_PIN_4)==RESET)
+      Delay(10); 
+ 
+      switch(flag1)
+          { 
+       case 0x01:
+          com1[3]=(level/10);
+          bsp_SendUart(com1);
+          flag1=0;
+            break;
+       case 0x02:
+         if(flag2==1)
+         {
+         bsp_SendUart(com);
+         flag2=0;
+         flag6=1;
+         }
+         if(level>=1&&flag5==1)
+         {
+            if(level>=200)
+            {
+              if(flag1!=2)           break; 
+              level-=1;
+             CCR1_Val = ((uint32_t)f_value * level) / 2000; 
+              if(flag1!=2)           break; 
+             Delay(3);
+            }
+            else if(level<200&&level>=10)
+            {
+               if(flag1!=2)         break; 
+               level-=1;
+            CCR1_Val = ((uint32_t)f_value * level) / 2000; 
+               if(flag1!=2)         break; 
+            Delay(10); 
+              }
+            else if(level<10&&level>=1)
+              {
+               if(flag1!=2)         break; 
+               level-=1;
+            CCR1_Val = ((uint32_t)f_value * level) / 2000; 
+               if(flag1!=2)         break; 
+               if(level<=1)         flag5=0;
+            Delay(1000); 
+              }break; 
+            }break;  
+       case 0x03:
+           com1[3]=(level/10);
+           bsp_SendUart(com1);
+           flag1=0;
+           break;
+       case 0x04:
+         if(flag3==1)
+         {
+         bsp_SendUart(com);
+         flag3=0;
+         flag5=1;
+         }
+         if(level<=700&&flag6==1)
+         {
+            if(level<=40)
+            {
+              if(flag1!=4)           break; 
+              level+=10;
+            CCR1_Val = ((uint32_t)f_value * level) / 2000;
+              if(flag1!=4)           break; 
+              Delay(200);
+            }
+            else              if(level<=200)
+              {
+                if(flag1!=4)          break; 
+                level+=1;
+            CCR1_Val = ((uint32_t)f_value * level) / 2000;
+                if(flag1!=4)          break; 
+                Delay(10);
+                             }
+            else  if((200<level)&&(level<=700))
+            {
+              if(flag1!=4)           break; 
+              level+=1;
+              CCR1_Val = ((uint32_t)f_value * level) / 2000; 
+              if(flag1!=4)           break; 
+              if(level>=700)       flag6=0;
+            Delay(3);    
+            }  break; 
+            } break;  
+       case 0x05:
+          if((temp<=70)&&(temp>=0))
+          {
+           CCR1_Val = ((uint32_t)f_value * temp) / 200;
+           level=(temp*10);   break; 
+          }
+          else
+            Delay(100);
+          break; 
+       default :
+          CCR1_Val = ((uint32_t)f_value * level) / 2000; 
+          break; 
+          }
+     }
+} 
+
+
+//    //-读输入IO状态
+//    if(GPIO_ReadInputPin(GPIOB, GPIO_PIN_4)==RESET)
 //{
 //      Delay(100);
 //    if (GPIO_ReadInputPin(GPIOB, GPIO_PIN_4)==RESET)  //SET or RESET
@@ -416,7 +536,7 @@ opt_byte2 = FLASH_ReadOptionByte(0x4804);
       ICValue1 = TIM1_GetCapture1();
       TIM1_ClearFlag(TIM1_FLAG_CC1);
     }*/
-  //}
+  // }
 //}
 
 
@@ -445,9 +565,9 @@ static void CLK_Config(void)
     
     CLK_DeInit(); //-恢复相关的时钟寄存器到默认值
     
-    CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
+    CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1); //配置内部高速振荡器（HSI）的分频器 一分频
     
-    CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1);
+    CLK_SYSCLKConfig(CLK_PRESCALER_CPUDIV1); //配置系统时钟分频器 1分频
     
 
 u32_clk_freq = CLK_GetClockFreq();
