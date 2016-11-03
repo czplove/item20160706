@@ -1,4 +1,4 @@
-/** 
+/**
   ******************************************************************************
   * @file     stm8s_it.c
   * @author   MCD Application Team
@@ -242,7 +242,7 @@ INTERRUPT_HANDLER(TIM1_CAP_COM_IRQHandler, 12)
      it is recommended to set a breakpoint on the following instruction.
   */
   ITStatus its;
-  static uint8_t i=0;
+  static uint16_t i=0;
   //-if(learn_f_flag != 0x55)
     TIM1_SetCounter(0x0000);
   //-ICValue1 = TIM1_GetCapture1();
